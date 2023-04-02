@@ -21,82 +21,33 @@ from sawtooth_sdk.protobuf.batch_pb2 import Batch
 def _sha512(data):
     return hashlib.sha512(data).hexdigest()
 
+FAMILY_NAME = 'locationKey'
+FAMILY_VERSION = '1.0'
 
-class IntkeyClient:
-    def __init__(self, url, keyfile=None):
+LOCATION_KEY_ADDRESS_PREFIX = _sha512(
+    FAMILY_NAME.encode('utf-8'))[0:6]
+
+
+def make_location_key_address(name):
+    return LOCATION_KEY_ADDRESS_PREFIX + _sha512(
+        name.encode('utf-8'))[-64:]
+
+
+class LocationKeyClient:
+    
+    def __init__(self, url):
         self.url = url
+        
+        context = create_context('secp256k1')
+        crypto_factory = CryptoFactory(context=context)
 
-        if keyfile is not None:
-            try:
-                with open(keyfile) as fd:
-                    private_key_str = fd.read().strip()
-                    fd.close()
-            except OSError as err:
-                raise IntkeyClientException(
-                    'Failed to read private key: {}'.format(str(err))) from err
+        self._signer = crypto_factory.new_signer(
+                context.new_random_private_key())
 
-            try:
-                private_key = Secp256k1PrivateKey.from_hex(private_key_str)
-            except ParseError as e:
-                raise IntkeyClientException(
-                    'Unable to load private key: {}'.format(str(e))) from e
 
-            self._signer = CryptoFactory(
-                create_context('secp256k1')).new_signer(private_key)
+    def location(self, data):
+        return self._send_transaction(data)
 
-    def set(self, name, value, wait=None):
-        return self._send_transaction('set', name, value, wait=wait)
-
-    def inc(self, name, value, wait=None):
-        return self._send_transaction('inc', name, value, wait=wait)
-
-    def dec(self, name, value, wait=None):
-        return self._send_transaction('dec', name, value, wait=wait)
-
-    def list(self):
-        result = self._send_request(
-            "state?address={}".format(
-                self._get_prefix()))
-
-        try:
-            encoded_entries = yaml.safe_load(result)["data"]
-
-            return [
-                cbor.loads(base64.b64decode(entry["data"]))
-                for entry in encoded_entries
-            ]
-
-        except BaseException:
-            return None
-
-    def show(self, name):
-        address = self._get_address(name)
-
-        result = self._send_request("state/{}".format(address), name=name,)
-
-        try:
-            return cbor.loads(
-                base64.b64decode(
-                    yaml.safe_load(result)["data"]))[name]
-
-        except BaseException:
-            return None
-
-    def _get_status(self, batch_id, wait):
-        try:
-            result = self._send_request(
-                'batch_statuses?id={}&wait={}'.format(batch_id, wait),)
-            return yaml.safe_load(result)['data'][0]['status']
-        except BaseException as err:
-            raise IntkeyClientException(err) from err
-
-    def _get_prefix(self):
-        return _sha512('intkey'.encode('utf-8'))[0:6]
-
-    def _get_address(self, name):
-        prefix = self._get_prefix()
-        game_address = _sha512(name.encode('utf-8'))[64:]
-        return prefix + game_address
 
     def _send_request(self, suffix, data=None, content_type=None, name=None):
         if self.url.startswith("http://"):
@@ -116,35 +67,34 @@ class IntkeyClient:
                 result = requests.get(url, headers=headers)
 
             if result.status_code == 404:
-                raise IntkeyClientException("No such key: {}".format(name))
+                raise Exception("No such key: {}".format(name))
 
             if not result.ok:
-                raise IntkeyClientException("Error {}: {}".format(
+                raise Exception("Error {}: {}".format(
                     result.status_code, result.reason))
 
         except requests.ConnectionError as err:
-            raise IntkeyClientException(
+            raise Exception(
                 'Failed to connect to REST API: {}'.format(err)) from err
 
         except BaseException as err:
-            raise IntkeyClientException(err) from err
+            raise Exception(err) from err
 
         return result.text
 
-    def _send_transaction(self, verb, name, value, wait=None):
+
+    def _send_transaction(self, data):
         payload = cbor.dumps({
-            'Verb': verb,
-            'Name': name,
-            'Value': value,
+            'data': data,
         })
 
         # Construct the address
-        address = self._get_address(name)
+        address = make_location_key_address(self._signer.get_public_key().as_hex())
 
         header = TransactionHeader(
             signer_public_key=self._signer.get_public_key().as_hex(),
-            family_name="intkey",
-            family_version="1.0",
+            family_name=FAMILY_NAME,
+            family_version=FAMILY_VERSION,
             inputs=[address],
             outputs=[address],
             dependencies=[],
@@ -162,31 +112,12 @@ class IntkeyClient:
         )
 
         batch_list = self._create_batch_list([transaction])
-        batch_id = batch_list.batches[0].header_signature
-
-        if wait and wait > 0:
-            wait_time = 0
-            start_time = time.time()
-            response = self._send_request(
-                "batches", batch_list.SerializeToString(),
-                'application/octet-stream',
-            )
-            while wait_time < wait:
-                status = self._get_status(
-                    batch_id,
-                    wait - int(wait_time),
-                )
-                wait_time = time.time() - start_time
-
-                if status != 'PENDING':
-                    return response
-
-            return response
 
         return self._send_request(
             "batches", batch_list.SerializeToString(),
             'application/octet-stream',
         )
+
 
     def _create_batch_list(self, transactions):
         transaction_signatures = [t.header_signature for t in transactions]
@@ -202,4 +133,5 @@ class IntkeyClient:
             header=header,
             transactions=transactions,
             header_signature=signature)
+        
         return BatchList(batches=[batch])
