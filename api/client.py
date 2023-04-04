@@ -5,6 +5,7 @@ import random
 import requests
 import yaml
 import cbor
+import json
 
 from sawtooth_signing import create_context
 from sawtooth_signing import CryptoFactory
@@ -25,12 +26,11 @@ FAMILY_NAME = 'locationKey'
 FAMILY_VERSION = '1.0'
 
 LOCATION_KEY_ADDRESS_PREFIX = _sha512(
-    FAMILY_NAME.encode('utf-8'))[0:6]
+    FAMILY_NAME.encode('utf-8'))[:6]
 
 
-def make_location_key_address(name):
-    return LOCATION_KEY_ADDRESS_PREFIX + _sha512(
-        name.encode('utf-8'))[-64:]
+def make_location_key_address(key, hash):
+    return LOCATION_KEY_ADDRESS_PREFIX + key[:6] + hash[-58:]
 
 
 class LocationKeyClient:
@@ -46,7 +46,12 @@ class LocationKeyClient:
 
 
     def location(self, data):
-        return self._send_transaction(data)
+        payload = {
+            'nonce': hex(random.randint(0, 2**64)),
+            'data': data
+        }
+                
+        return self._send_transaction(cbor.dumps(payload))
 
 
     def _send_request(self, suffix, data=None, content_type=None, name=None):
@@ -83,23 +88,23 @@ class LocationKeyClient:
         return result.text
 
 
-    def _send_transaction(self, data):
-        payload = cbor.dumps({
-            'data': data,
-        })
+    def _send_transaction(self, payload):
+        
+        payload_sha512=_sha512(payload)
+        key = self._signer.get_public_key().as_hex()
 
         # Construct the address
-        address = make_location_key_address(self._signer.get_public_key().as_hex())
+        address = make_location_key_address(key, payload_sha512)
 
         header = TransactionHeader(
-            signer_public_key=self._signer.get_public_key().as_hex(),
+            signer_public_key=key,
             family_name=FAMILY_NAME,
             family_version=FAMILY_VERSION,
             inputs=[address],
             outputs=[address],
             dependencies=[],
-            payload_sha512=_sha512(payload),
-            batcher_public_key=self._signer.get_public_key().as_hex(),
+            payload_sha512=payload_sha512,
+            batcher_public_key=key,
             nonce=hex(random.randint(0, 2**64))
         ).SerializeToString()
 
