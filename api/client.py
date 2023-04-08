@@ -22,37 +22,107 @@ from sawtooth_sdk.protobuf.batch_pb2 import Batch
 def _sha512(data):
     return hashlib.sha512(data).hexdigest()
 
-FAMILY_NAME = 'locationKey'
+
+FAMILY_NAME = 'AirAnchor'
 FAMILY_VERSION = '1.0'
 
 LOCATION_KEY_ADDRESS_PREFIX = _sha512(
     FAMILY_NAME.encode('utf-8'))[:6]
 
 
-def make_location_key_address(key, hash):
-    return LOCATION_KEY_ADDRESS_PREFIX + key[:6] + hash[-58:]
-
-
-class LocationKeyClient:
+def make_location_key_address(key, hash=None):
+    prefix = LOCATION_KEY_ADDRESS_PREFIX + key[:6]
     
-    def __init__(self, url):
-        self.url = url
+    if not hash:
+        return prefix
+
+    return prefix + hash[-58:]
+
+def _get_private_key_as_signer(priv_path):
+    context = create_context('secp256k1')
+    crypto_factory = CryptoFactory(context=context)
+    
+    if priv_path != None:
+        with open(priv_path, "r") as f:
+            key_hex = f.read()
+
+        key = Secp256k1PrivateKey.from_hex(key_hex)
         
-        context = create_context('secp256k1')
-        crypto_factory = CryptoFactory(context=context)
+    else:
+        key = context.new_random_private_key()
+        
+    return crypto_factory.new_signer(key)
 
-        self._signer = crypto_factory.new_signer(
-                context.new_random_private_key())
+class AirAnchorClient:
 
+    def __init__(self, url, ca, priv_path):
+        self.url = url
+        self.ca = ca
+        self._signer = _get_private_key_as_signer(priv_path)
 
     def location(self, data):
+
+        csr = {
+            'distinguished_name': "DRON",
+            'public_key': self._signer.get_public_key().as_hex(),
+            'optional_params': {}
+        }
+        
+        csr_firm = self._send_ca_request(csr=csr)
+    
         payload = {
-            'nonce': hex(random.randint(0, 2**64)),
+            'csr': csr,
+            'csr_firm': csr_firm,
+            'nonce': hex(random.randint(0, 2*+256)),
             'data': data
         }
-                
-        return self._send_transaction(cbor.dumps(payload))
 
+        payload_encoded = cbor.dumps(payload)
+
+        return self._send_transaction(payload_encoded)
+    
+    
+    def _send_ca_request(self, csr, suffix="api/v1/sign"):
+        if self.ca.startswith("http://"):
+            ca = "{}/{}".format(self.ca, suffix)
+        else:
+            ca = "http://{}/{}".format(self.ca, suffix)
+            
+        ca_response = requests.post(ca, json=csr)
+         
+        if ca_response.status_code != 200:
+            raise Exception("There was an error trying to call ca. Reason: {}".format(ca_response.reason))
+    
+        return ca_response.json()
+
+    def show(self, key, hash):
+        address = make_location_key_address(key, hash)
+
+        result = self._send_request("state/{}".format(address))
+
+        try:
+            return cbor.loads(
+                base64.b64decode(
+                    yaml.safe_load(result)["data"]))[hash]
+
+        except BaseException:
+            return None
+    
+    def list(self, key):
+        result = self._send_request(
+            "state?address={}".format(
+                make_location_key_address(key=key))) 
+
+        try:
+            encoded_entries = yaml.safe_load(result)["data"]
+
+            return [
+                cbor.loads(base64.b64decode(entry["data"]))
+                for entry in encoded_entries
+            ]
+
+        except BaseException:
+            return None
 
     def _send_request(self, suffix, data=None, content_type=None, name=None):
         if self.url.startswith("http://"):
@@ -138,5 +208,5 @@ class LocationKeyClient:
             header=header,
             transactions=transactions,
             header_signature=signature)
-        
+
         return BatchList(batches=[batch])

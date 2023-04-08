@@ -8,17 +8,17 @@ data_files = []
 
 if os.path.exists("/etc/default"):
     data_files.append(
-        ('/etc/default', ['packaging/systemd/dron-tp-api']))
+        ('/etc/default', ['packaging/systemd/air-anchor-api']))
 
 if os.path.exists("/lib/systemd/system"):
     data_files.append(
         ('/lib/systemd/system',
-         ['packaging/systemd/dron-tp-api.service']))
+         ['packaging/systemd/air-anchor-api.service']))
 
 setup(
-    name='dron-tp-api',
+    name='air_anchor_api',
     version='1.0',
-    description='Sawtooth Dron tp wrapper',
+    description='AirAnchorApi to interact with the blockchain',
     author='divios',
     url='',
     packages=find_packages(),
@@ -28,11 +28,12 @@ setup(
         "uvicorn",
         "fastapi",
         "cbor",
-        "protobuf"
+        "protobuf",
+        "colorlog"
     ],
     data_files=data_files,
     entry_points={
         'console_scripts': [
-            'location-tp = dron-tp-api.app:main'
+            'air_anchor_api= air_anchor_api.app:main_wrapper'
         ]
     })

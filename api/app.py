@@ -8,26 +8,14 @@ import pkg_resources
 
 from colorlog import ColoredFormatter
 
-from sawtooth_intkey.client_cli.generate import add_generate_parser
-from sawtooth_intkey.client_cli.generate import do_generate
-from sawtooth_intkey.client_cli.populate import add_populate_parser
-from sawtooth_intkey.client_cli.populate import do_populate
-from sawtooth_intkey.client_cli.create_batch import add_create_batch_parser
-from sawtooth_intkey.client_cli.create_batch import do_create_batch
-from sawtooth_intkey.client_cli.load import add_load_parser
-from sawtooth_intkey.client_cli.load import do_load
-from sawtooth_intkey.client_cli.intkey_workload import add_workload_parser
-from sawtooth_intkey.client_cli.intkey_workload import do_workload
-
-from sawtooth_intkey.client_cli.intkey_client import IntkeyClient
-from sawtooth_intkey.client_cli.exceptions import IntKeyCliException
-from sawtooth_intkey.client_cli.exceptions import IntkeyClientException
+from api.client import AirAnchorClient
 
 
-DISTRIBUTION_NAME = 'sawtooth-intkey'
+DISTRIBUTION_NAME = 'AirAnchor-api'
 
 
 DEFAULT_URL = 'http://127.0.0.1:8008'
+DEFAULT_CA = "http://127.0.0.1:8654"
 
 
 def create_console_handler(verbose_level):
@@ -69,6 +57,23 @@ def create_parent_parser(prog_name):
         '-v', '--verbose',
         action='count',
         help='enable more verbose output')
+    
+    parent_parser.add_argument(
+       '--url',
+        type=str,
+        help='specify URL of REST API')
+    
+    parent_parser.add_argument(
+        '--ca',
+        type=str,
+        help='specify URL of CA'  
+    )
+    
+    parent_parser.add_argument(
+        '--key-path',
+        type=str,
+        help='private key path'
+    )
 
     try:
         version = pkg_resources.get_distribution(DISTRIBUTION_NAME).version
@@ -95,16 +100,8 @@ def create_parser(prog_name):
     subparsers = parser.add_subparsers(title='subcommands', dest='command')
 
     add_set_parser(subparsers, parent_parser)
-    add_inc_parser(subparsers, parent_parser)
-    add_dec_parser(subparsers, parent_parser)
     add_show_parser(subparsers, parent_parser)
     add_list_parser(subparsers, parent_parser)
-
-    add_generate_parser(subparsers, parent_parser)
-    add_load_parser(subparsers, parent_parser)
-    add_populate_parser(subparsers, parent_parser)
-    add_create_batch_parser(subparsers, parent_parser)
-    add_workload_parser(subparsers, parent_parser)
 
     return parser
 
@@ -116,156 +113,46 @@ def add_set_parser(subparsers, parent_parser):
         'set',
         parents=[parent_parser],
         description=message,
-        help='Sets an intkey value')
+        help='Sends registration petition to store <data> in the blockchain')
 
     parser.add_argument(
-        'name',
+        'data',
         type=str,
-        help='name of key to set')
-
-    parser.add_argument(
-        'value',
-        type=int,
-        help='amount to set')
-
-    parser.add_argument(
-        '--url',
-        type=str,
-        help='specify URL of REST API')
-
-    parser.add_argument(
-        '--keyfile',
-        type=str,
-        help="identify file containing user's private key")
-
-    parser.add_argument(
-        '--wait',
-        nargs='?',
-        const=sys.maxsize,
-        type=int,
-        help='set time, in seconds, to wait for transaction to commit')
+        help='data as plain text to register')
 
 
 def do_set(args):
-    name, value, wait = args.name, args.value, args.wait
-    client = _get_client(args)
-    response = client.set(name, value, wait)
-    print(response)
-
-
-def add_inc_parser(subparsers, parent_parser):
-    message = 'Sends an intkey transaction to increment <name> by <value>.'
-
-    parser = subparsers.add_parser(
-        'inc',
-        parents=[parent_parser],
-        description=message,
-        help='Increments an intkey value')
-
-    parser.add_argument(
-        'name',
-        type=str,
-        help='identify name of key to increment')
-
-    parser.add_argument(
-        'value',
-        type=int,
-        help='specify amount to increment')
-
-    parser.add_argument(
-        '--url',
-        type=str,
-        help='specify URL of REST API')
-
-    parser.add_argument(
-        '--keyfile',
-        type=str,
-        help="identify file containing user's private key")
-
-    parser.add_argument(
-        '--wait',
-        nargs='?',
-        const=sys.maxsize,
-        type=int,
-        help='set time, in seconds, to wait for transaction to commit')
-
-
-def do_inc(args):
-    name, value, wait = args.name, args.value, args.wait
-    client = _get_client(args)
-    response = client.inc(name, value, wait)
-    print(response)
-
-
-def add_dec_parser(subparsers, parent_parser):
-    message = 'Sends an intkey transaction to decrement <name> by <value>.'
-
-    parser = subparsers.add_parser(
-        'dec',
-        parents=[parent_parser],
-        description=message,
-        help='Decrements an intkey value')
-
-    parser.add_argument(
-        'name',
-        type=str,
-        help='identify name of key to decrement')
-
-    parser.add_argument(
-        'value',
-        type=int,
-        help='amount to decrement')
-
-    parser.add_argument(
-        '--url',
-        type=str,
-        help='specify URL of REST API')
-
-    parser.add_argument(
-        '--keyfile',
-        type=str,
-        help="identify file containing user's private key")
-
-    parser.add_argument(
-        '--wait',
-        nargs='?',
-        const=sys.maxsize,
-        type=int,
-        help='set time, in seconds, to wait for transaction to commit')
-
-
-def do_dec(args):
-    name, value, wait = args.name, args.value, args.wait
-    client = _get_client(args)
-    response = client.dec(name, value, wait)
-    print(response)
+    data, url, ca, key_file = args.data, args.url, args.ca, args.key_file
+    client = _get_client(url, ca, key_file)
+    client.location(data)
+    print("Transaction sent succesfully")
 
 
 def add_show_parser(subparsers, parent_parser):
-    message = 'Shows the value of the key <name>.'
+    message = 'Shows the data stored for a specific <key> and <hash>.'
 
     parser = subparsers.add_parser(
         'show',
         parents=[parent_parser],
         description=message,
-        help='Displays the specified intkey value')
+        help='Displays the specified data linked to a key and hash')
+    
+    parser.add_argument(
+        'key',
+        type=str,
+        help='public key of the client that sent the transaction')
 
     parser.add_argument(
-        'name',
+        'hash',
         type=str,
-        help='name of key to show')
-
-    parser.add_argument(
-        '--url',
-        type=str,
-        help='specify URL of REST API')
+        help='the hash of the transaction')
 
 
 def do_show(args):
-    name = args.name
-    client = _get_client(args, False)
-    value = client.show(name)
-    print('{}: {}'.format(name, value))
+    key, hash, url, ca, key_file = args.key, args.hash, args.url, args.ca, args.key_file
+    client = _get_client(url, ca, key_file)
+    address, data = client.show(key, hash)    
+    print('{}: {}'.format(address, data))
 
 
 def add_list_parser(subparsers, parent_parser):
@@ -275,26 +162,28 @@ def add_list_parser(subparsers, parent_parser):
         'list',
         parents=[parent_parser],
         description=message,
-        help='Displays all intkey values')
+        help='Displays all data stored by a client')
 
     parser.add_argument(
-        '--url',
+        'key',
         type=str,
-        help='specify URL of REST API')
+        help='public key of the client to look up for')
 
 
 def do_list(args):
-    client = _get_client(args, False)
-    results = client.list()
+    key, url, ca, key_file = args.key, args.url, args.ca, args.key_file
+    client = _get_client(url, ca, key_file)
+    results = client.list(key)
     for pair in results:
         for name, value in pair.items():
             print('{}: {}'.format(name, value))
 
 
-def _get_client(args, read_key_file=True):
-    return IntkeyClient(
-        url=DEFAULT_URL if args.url is None else args.url,
-        keyfile=_get_keyfile(args) if read_key_file else None)
+def _get_client(url, ca, key_path):
+    return AirAnchorClient(
+        url=DEFAULT_URL if url is None else url,
+        ca=DEFAULT_CA if ca is None else ca,
+        priv_path=key_path)
 
 
 def _get_keyfile(args):
@@ -326,38 +215,23 @@ def main(prog_name=os.path.basename(sys.argv[0]), args=None):
     if not args.command:
         parser.print_help()
         sys.exit(1)
+        
+    commands = {
+        'set': do_set,
+        'show': do_show,
+        'list': do_list
+    }
 
-    if args.command == 'set':
-        do_set(args)
-    elif args.command == 'inc':
-        do_inc(args)
-    elif args.command == 'dec':
-        do_dec(args)
-    elif args.command == 'show':
-        do_show(args)
-    elif args.command == 'list':
-        do_list(args)
-    elif args.command == 'generate':
-        do_generate(args)
-    elif args.command == 'populate':
-        do_populate(args)
-    elif args.command == 'load':
-        do_load(args)
-    elif args.command == 'create_batch':
-        do_create_batch(args)
-    elif args.command == 'workload':
-        do_workload(args)
-
-    else:
-        raise IntKeyCliException("invalid command: {}".format(args.command))
+    commands[args.command](args)
 
 
 def main_wrapper():
     # pylint: disable=bare-except
     try:
         main()
-    except (IntKeyCliException, IntkeyClientException) as err:
+    except Exception as err:
         print("Error: {}".format(err), file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         sys.exit(1)
     except KeyboardInterrupt:
         pass
