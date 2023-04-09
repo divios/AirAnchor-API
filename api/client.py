@@ -101,7 +101,7 @@ class AirAnchorClient:
         result = self._send_request("state/{}".format(address))
 
         try:
-            return cbor.loads(
+            cbor.loads(
                 base64.b64decode(
                     yaml.safe_load(result)["data"]))[hash]
 

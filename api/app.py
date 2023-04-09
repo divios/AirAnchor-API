@@ -151,8 +151,8 @@ def add_show_parser(subparsers, parent_parser):
 def do_show(args):
     key, hash, url, ca, key_file = args.key, args.hash, args.url, args.ca, args.key_file
     client = _get_client(url, ca, key_file)
-    address, data = client.show(key, hash)    
-    print('{}: {}'.format(address, data))
+    data = client.show(key, hash)    
+    print('{}: {}'.format(data))
 
 
 def add_list_parser(subparsers, parent_parser):
