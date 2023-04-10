@@ -34,6 +34,6 @@ setup(
     data_files=data_files,
     entry_points={
         'console_scripts': [
-            'air_anchor_api= air_anchor_api.app:main_wrapper'
+            'air-anchor-api= air_anchor_api.app:main_wrapper'
         ]
     })

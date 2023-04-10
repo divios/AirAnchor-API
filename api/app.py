@@ -14,8 +14,8 @@ from api.client import AirAnchorClient
 DISTRIBUTION_NAME = 'AirAnchor-api'
 
 
-DEFAULT_URL = 'http://127.0.0.1:8008'
-DEFAULT_CA = "http://127.0.0.1:8654"
+DEFAULT_SAWTOOTH = 'http://127.0.0.1:8008'
+DEFAULT_GATEWAY = "http://127.0.0.1:8654"
 
 
 def create_console_handler(verbose_level):
@@ -61,14 +61,9 @@ def create_parent_parser(prog_name):
     parent_parser.add_argument(
        '--url',
         type=str,
+        default=DEFAULT_SAWTOOTH,
         help='specify URL of REST API')
-    
-    parent_parser.add_argument(
-        '--ca',
-        type=str,
-        help='specify URL of CA'  
-    )
-    
+        
     parent_parser.add_argument(
         '--key-path',
         type=str,
@@ -119,13 +114,20 @@ def add_set_parser(subparsers, parent_parser):
         'data',
         type=str,
         help='data as plain text to register')
+    
+    parser.add_argument(
+        '--gateway',
+        type=str,
+        default=DEFAULT_GATEWAY,
+        help='specify URL of gateway'  
+    )
 
 
 def do_set(args):
-    data, url, ca, key_file = args.data, args.url, args.ca, args.key_file
+    data, url, ca, key_file = args.data, args.url, args.gateway, args.key_path
     client = _get_client(url, ca, key_file)
-    client.location(data)
-    print("Transaction sent succesfully")
+    result = client.do_location(data)
+    print(result)
 
 
 def add_show_parser(subparsers, parent_parser):
@@ -151,7 +153,7 @@ def add_show_parser(subparsers, parent_parser):
 def do_show(args):
     key, hash, url, ca, key_file = args.key, args.hash, args.url, args.ca, args.key_file
     client = _get_client(url, ca, key_file)
-    data = client.show(key, hash)    
+    data = client.do_show(key, hash)    
     print('{}: {}'.format(data))
 
 
@@ -179,25 +181,11 @@ def do_list(args):
             print('{}: {}'.format(name, value))
 
 
-def _get_client(url, ca, key_path):
+def _get_client(sawtooth_url, gateway_url, key_path):
     return AirAnchorClient(
-        url=DEFAULT_URL if url is None else url,
-        ca=DEFAULT_CA if ca is None else ca,
+        sawtooth_rest_url=sawtooth_url,
+        gateway_url=gateway_url,
         priv_path=key_path)
-
-
-def _get_keyfile(args):
-    try:
-        if args.keyfile is not None:
-            return args.keyfile
-    except AttributeError:
-        return None
-
-    real_user = getpass.getuser()
-    home = os.path.expanduser("~")
-    key_dir = os.path.join(home, ".sawtooth", "keys")
-
-    return '{}/{}.priv'.format(key_dir, real_user)
 
 
 def main(prog_name=os.path.basename(sys.argv[0]), args=None):
