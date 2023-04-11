@@ -1,0 +1,13 @@
+[Unit]
+Description=Sawtooth Location TP Python
+After=network.target
+
+[Service]
+User=sawtooth
+Group=sawtooth
+EnvironmentFile=-/etc/default/air-anchor-api
+ExecStart=/usr/bin/air-anchor-api $AIR_ANCHOR_ENVIROMENT
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
