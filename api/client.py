@@ -75,7 +75,7 @@ class AirAnchorClient:
         }
         
         transactionRequest = {
-            'sender_public_key': pub_key
+            'sender_public_key': pub_key,
             'csr': csr,
             'data': data
         }
