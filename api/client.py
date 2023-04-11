@@ -60,20 +60,22 @@ def _validate_http_url(url: str):
 
 class AirAnchorClient:
 
-    def __init__(self, sawtooth_rest_url, gateway_url, priv_path):
+    def __init__(self, sawtooth_rest_url, gateway_url, priv_path: None):
         self._sawtooth_rest_url = _validate_http_url(sawtooth_rest_url)
         self._gateway_url = _validate_http_url(gateway_url)
         self._signer = _get_private_key_as_signer(priv_path)
 
     def do_location(self, data):
+        pub_key = self._signer.get_public_key().as_hex()
 
         csr = {
             'distinguished_name': "DRON",
-            'public_key': self._signer.get_public_key().as_hex(),
+            'public_key': pub_key,
             'optional_params': {}
         }
         
         transactionRequest = {
+            'sender_public_key': pub_key
             'csr': csr,
             'data': data
         }
@@ -96,7 +98,7 @@ class AirAnchorClient:
     def do_show(self, key, hash):
         address = make_location_key_address(key, hash)
 
-        result = self._send_request("state/{}".format(address))
+        result = self._send_request("{}/state/{}".format(self._sawtooth_rest_url, address))
 
         try:
             cbor.loads(
@@ -108,9 +110,11 @@ class AirAnchorClient:
     
     
     def do_list(self, key):
+        address = make_location_key_address(key=key)
+        
         result = self._send_request(
-            "state?address={}".format(
-                make_location_key_address(key=key))) 
+            "{}/state?address={}".format(
+                self._sawtooth_rest_url, address)) 
 
         try:
             encoded_entries = yaml.safe_load(result)["data"]
@@ -125,7 +129,7 @@ class AirAnchorClient:
 
     def _send_request(self, url):
         try: 
-            result = requests.post(url)
+            result = requests.get(url)
 
             if result.status_code == 404:
                 raise Exception("No such key")

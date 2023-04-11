@@ -151,8 +151,8 @@ def add_show_parser(subparsers, parent_parser):
 
 
 def do_show(args):
-    key, hash, url, ca, key_file = args.key, args.hash, args.url, args.ca, args.key_file
-    client = _get_client(url, ca, key_file)
+    key, hash, url = args.key, args.hash, args.url
+    client = _get_client(url, DEFAULT_GATEWAY)
     data = client.do_show(key, hash)    
     print('{}: {}'.format(data))
 
@@ -173,15 +173,15 @@ def add_list_parser(subparsers, parent_parser):
 
 
 def do_list(args):
-    key, url, ca, key_file = args.key, args.url, args.ca, args.key_file
-    client = _get_client(url, ca, key_file)
-    results = client.list(key)
+    key, url = args.key, args.url
+    client = _get_client(url, DEFAULT_GATEWAY)
+    results = client.do_list(key)
     for pair in results:
         for name, value in pair.items():
             print('{}: {}'.format(name, value))
 
 
-def _get_client(sawtooth_url, gateway_url, key_path):
+def _get_client(sawtooth_url, gateway_url, key_path=None):
     return AirAnchorClient(
         sawtooth_rest_url=sawtooth_url,
         gateway_url=gateway_url,
