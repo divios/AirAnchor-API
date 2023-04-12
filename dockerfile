@@ -1,5 +1,5 @@
 
-FROM python:3.7
+FROM python:3.11
 
 WORKDIR /code
 
@@ -15,4 +15,4 @@ COPY ./setup.py  /code/setup.py
 RUN python3 setup.py clean --all \
     && python3 setup.py build \
     && python3 setup.py install \
-    && cp -r ./api /usr/local/lib/python3.7/site-packages/air_anchor_api
+    && cp -r ./api /usr/local/lib/python3.11/site-packages/air_anchor_api
