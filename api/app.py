@@ -13,9 +13,8 @@ from api.client import AirAnchorClient
 
 DISTRIBUTION_NAME = 'AirAnchor-api'
 
-
 DEFAULT_SAWTOOTH = 'http://127.0.0.1:8008'
-DEFAULT_GATEWAY = "http://127.0.0.1:8654"
+DEFAULT_RABBITMQ = "http://127.0.0.1:8654"
 
 
 def create_console_handler(verbose_level):
@@ -57,15 +56,9 @@ def create_parent_parser(prog_name):
         '-v', '--verbose',
         action='count',
         help='enable more verbose output')
-    
+            
     parent_parser.add_argument(
-       '--url',
-        type=str,
-        default=DEFAULT_SAWTOOTH,
-        help='specify URL of REST API')
-        
-    parent_parser.add_argument(
-        '--key-path',
+        '--priv-key',
         type=str,
         help='private key path'
     )
@@ -116,16 +109,16 @@ def add_set_parser(subparsers, parent_parser):
         help='data as plain text to register')
     
     parser.add_argument(
-        '--gateway',
+        '--rabbitmq',
         type=str,
-        default=DEFAULT_GATEWAY,
-        help='specify URL of gateway'  
+        default=DEFAULT_RABBITMQ,
+        help='specify URL of rabbimq'  
     )
 
 
 def do_set(args):
-    data, url, ca, key_file = args.data, args.url, args.gateway, args.key_path
-    client = _get_client(url, ca, key_file)
+    data, rabbitmq_url, key_file = args.data, args.rabbitmq, args.priv_key
+    client = _get_client(DEFAULT_SAWTOOTH, rabbitmq_url, key_file)
     result = client.do_location(data)
     print(result)
 
@@ -148,11 +141,17 @@ def add_show_parser(subparsers, parent_parser):
         'hash',
         type=str,
         help='the hash of the transaction')
+    
+    parser.add_argument(
+       '--url',
+        type=str,
+        default=DEFAULT_SAWTOOTH,
+        help='specify URL of REST API')
 
 
 def do_show(args):
     key, hash, url = args.key, args.hash, args.url
-    client = _get_client(url, DEFAULT_GATEWAY)
+    client = _get_client(url, DEFAULT_RABBITMQ)
     data = client.do_show(key, hash)    
     print('{}: {}'.format(data))
 
@@ -170,21 +169,27 @@ def add_list_parser(subparsers, parent_parser):
         'key',
         type=str,
         help='public key of the client to look up for')
+    
+    parser.add_argument(
+       '--url',
+        type=str,
+        default=DEFAULT_SAWTOOTH,
+        help='specify URL of REST API')
 
 
 def do_list(args):
     key, url = args.key, args.url
-    client = _get_client(url, DEFAULT_GATEWAY)
+    client = _get_client(url, DEFAULT_RABBITMQ)
     results = client.do_list(key)
     for pair in results:
         for name, value in pair.items():
             print('{}: {}'.format(name, value))
 
 
-def _get_client(sawtooth_url, gateway_url, key_path=None):
+def _get_client(sawtooth_url, rabbitmq_url, key_path=None):
     return AirAnchorClient(
         sawtooth_rest_url=sawtooth_url,
-        gateway_url=gateway_url,
+        rabbitmq_url=rabbitmq_url,
         priv_path=key_path)
 
 
