@@ -7,16 +7,12 @@ import yaml
 import cbor
 import json
 
+import pika
+
 from sawtooth_signing import create_context
 from sawtooth_signing import CryptoFactory
 from sawtooth_signing import ParseError
 from sawtooth_signing.secp256k1 import Secp256k1PrivateKey
-
-from sawtooth_sdk.protobuf.transaction_pb2 import TransactionHeader
-from sawtooth_sdk.protobuf.transaction_pb2 import Transaction
-from sawtooth_sdk.protobuf.batch_pb2 import BatchList
-from sawtooth_sdk.protobuf.batch_pb2 import BatchHeader
-from sawtooth_sdk.protobuf.batch_pb2 import Batch
 
 
 def _sha512(data):
@@ -60,11 +56,15 @@ def _validate_http_url(url: str):
 
 class AirAnchorClient:
 
-    def __init__(self, sawtooth_rest_url, gateway_url, priv_path: None):
+    def __init__(self, sawtooth_rest_url, rabbitmq_url, priv_path: None):
         self._sawtooth_rest_url = _validate_http_url(sawtooth_rest_url)
-        self._gateway_url = _validate_http_url(gateway_url)
+        
+        self._rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_url))
+        self._rabbit_channel = self._rabbit_connection.channel()
+        self._rabbit_channel.queue_declare(queue='sawtooth', durable=True)
+        
         self._signer = _get_private_key_as_signer(priv_path)
-
+        
     def do_location(self, data):
         pub_key = self._signer.get_public_key().as_hex()
 
@@ -80,14 +80,15 @@ class AirAnchorClient:
             'data': data
         }
 
-        url = self._gateway_url + '/api/v1/transaction'
+        payload_encoded = cbor.dumps(transactionRequest)
 
         try:
-            res = requests.post(url, json=transactionRequest)
-            
-            if res.status_code != 200:
-                return "Error when calling gateway: Reason: {}, detail: {}".format(res.reason, res.text)
-            
+            self._rabbit_channel.basic_publish(exchange='', 
+                                               routing_key='sawtooth', 
+                                               body=payload_encoded,
+                                               properties=pika.BasicProperties(
+                                                delivery_mode = pika.spec.PERSISTENT_DELIVERY_MODE))
+                        
             return "Transaction sent sucessfully"
             
         except BaseException as err:

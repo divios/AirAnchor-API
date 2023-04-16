@@ -29,6 +29,7 @@ setup(
         "fastapi",
         "cbor",
         "colorlog",
+        "pika",
         "protobuf==3.20.*"
     ],
     data_files=data_files,
