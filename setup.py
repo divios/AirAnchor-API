@@ -30,6 +30,7 @@ setup(
         "cbor",
         "colorlog",
         "pika",
+        "pyrate_limiter",
         "protobuf==3.20.*"
     ],
     data_files=data_files,

@@ -58,9 +58,7 @@ def _validate_http_url(url: str):
 
 class AirAnchorClient:
 
-    def __init__(self, sawtooth_rest_url, rabbitmq_url, priv_path: None):
-        self._sawtooth_rest_url = _validate_http_url(sawtooth_rest_url)
-        
+    def __init__(self, rabbitmq_url, priv_path: None): 
         self._rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_url))
         self._rabbit_channel = self._rabbit_connection.channel()
         self._rabbit_channel.queue_declare(queue='sawtooth', durable=True)
@@ -99,13 +97,18 @@ class AirAnchorClient:
         )
 
 
+class AirAnchorQueryClient:
+    
+    def __init__(self, sawtooth_rest_url):
+        self._sawtooth_rest_url = _validate_http_url(sawtooth_rest_url)
+    
     def do_show(self, key, hash):
         address = make_location_key_address(key, hash)
 
         result = self._send_request("{}/state/{}".format(self._sawtooth_rest_url, address))
 
         try:
-            cbor.loads(
+            return cbor.loads(
                 base64.b64decode(
                     yaml.safe_load(result)["data"]))[hash]
 

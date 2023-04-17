@@ -8,7 +8,7 @@ import pkg_resources
 
 from colorlog import ColoredFormatter
 
-from api.client import AirAnchorClient
+from api.client import AirAnchorClient, AirAnchorQueryClient
 
 
 DISTRIBUTION_NAME = 'AirAnchor-api'
@@ -118,7 +118,11 @@ def add_set_parser(subparsers, parent_parser):
 
 def do_set(args):
     data, rabbitmq_url, key_file = args.data, args.rabbitmq, args.priv_key
-    client = _get_client(DEFAULT_SAWTOOTH, rabbitmq_url, key_file)
+    
+    client = AirAnchorClient(
+        rabbitmq_url=rabbitmq_url,
+        priv_path=key_file)
+    
     result = client.do_location(data)
     print(result)
 
@@ -151,9 +155,12 @@ def add_show_parser(subparsers, parent_parser):
 
 def do_show(args):
     key, hash, url = args.key, args.hash, args.url
-    client = _get_client(url, DEFAULT_RABBITMQ)
-    data = client.do_show(key, hash)    
-    print('{}: {}'.format(data))
+    
+    client = AirAnchorQueryClient(url)
+    
+    value = client.do_show(key, hash)
+    
+    print('{}: {}'.format(hash, value))
 
 
 def add_list_parser(subparsers, parent_parser):
@@ -179,18 +186,14 @@ def add_list_parser(subparsers, parent_parser):
 
 def do_list(args):
     key, url = args.key, args.url
-    client = _get_client(url, DEFAULT_RABBITMQ)
+    
+    client = AirAnchorQueryClient(url)
+    
     results = client.do_list(key)
+    
     for pair in results:
         for name, value in pair.items():
             print('{}: {}'.format(name, value))
-
-
-def _get_client(sawtooth_url, rabbitmq_url, key_path=None):
-    return AirAnchorClient(
-        sawtooth_rest_url=sawtooth_url,
-        rabbitmq_url=rabbitmq_url,
-        priv_path=key_path)
 
 
 def main(prog_name=os.path.basename(sys.argv[0]), args=None):
