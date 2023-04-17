@@ -7,7 +7,7 @@ from random import randint, random
 from time import sleep
 from pyrate_limiter import Duration, RequestRate, Limiter
 
-client = AirAnchorClient(sawtooth_rest_url='', rabbitmq_url='192.168.1.169', priv_path="priv.key")
+client = AirAnchorClient(rabbitmq_url='192.168.1.169', priv_path="priv.key")
 leaky_bucket = Limiter(RequestRate(limit=40, interval=Duration.SECOND))
 count = 0
 

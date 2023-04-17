@@ -9,6 +9,7 @@ import json
 
 import pika
 
+from api.model import *
 from sawtooth_signing import create_context
 from sawtooth_signing import CryptoFactory
 from sawtooth_signing import ParseError
@@ -18,6 +19,7 @@ from sawtooth_signing.secp256k1 import Secp256k1PrivateKey
 def _sha512(data):
     return hashlib.sha512(data).hexdigest()
 
+DISTINGUIE_NAME = 'DRON'
 
 FAMILY_NAME = 'AirAnchor'
 FAMILY_VERSION = '1.0'
@@ -56,9 +58,7 @@ def _validate_http_url(url: str):
 
 class AirAnchorClient:
 
-    def __init__(self, sawtooth_rest_url, rabbitmq_url, priv_path: None):
-        self._sawtooth_rest_url = _validate_http_url(sawtooth_rest_url)
-        
+    def __init__(self, rabbitmq_url, priv_path: None): 
         self._rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_url))
         self._rabbit_channel = self._rabbit_connection.channel()
         self._rabbit_channel.queue_declare(queue='sawtooth', durable=True)
@@ -66,26 +66,14 @@ class AirAnchorClient:
         self._signer = _get_private_key_as_signer(priv_path)
         
     def do_location(self, data):
-        pub_key = self._signer.get_public_key().as_hex()
 
-        csr = {
-            'distinguished_name': "DRON",
-            'public_key': pub_key,
-            'optional_params': {}
-        }
+        certificate_request = self._create_certificate_request()
+        transaction_request= self._create_transaction_request(certificate_request, data)
         
-        transactionRequest = {
-            'sender_public_key': pub_key,
-            'csr': csr,
-            'data': data
-        }
-
-        payload_encoded = cbor.dumps(transactionRequest)
-
         try:
             self._rabbit_channel.basic_publish(exchange='', 
                                                routing_key='sawtooth', 
-                                               body=payload_encoded,
+                                               body=transaction_request.serialize(),
                                                properties=pika.BasicProperties(
                                                 delivery_mode = pika.spec.PERSISTENT_DELIVERY_MODE))
                         
@@ -93,16 +81,34 @@ class AirAnchorClient:
             
         except BaseException as err:
             return str(err)
+        
+        
+    def _create_certificate_request(self) -> CertificateRequest:
+            return CertificateRequest.create(
+                distinguied_name=DISTINGUIE_NAME,
+                signer=self._signer
+            )
             
+    def _create_transaction_request(self, certificate_request: CertificateRequest, data: str):
+        return TransactionRequest.create(
+            self._signer,
+            certificate_request=certificate_request,
+            data=data
+        )
 
 
+class AirAnchorQueryClient:
+    
+    def __init__(self, sawtooth_rest_url):
+        self._sawtooth_rest_url = _validate_http_url(sawtooth_rest_url)
+    
     def do_show(self, key, hash):
         address = make_location_key_address(key, hash)
 
         result = self._send_request("{}/state/{}".format(self._sawtooth_rest_url, address))
 
         try:
-            cbor.loads(
+            return cbor.loads(
                 base64.b64decode(
                     yaml.safe_load(result)["data"]))[hash]
 
