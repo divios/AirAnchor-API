@@ -4,6 +4,7 @@ import cbor
 import secrets
 from hashlib import sha512
 from sawtooth_signing import Signer
+import json
 
 @dataclass
 class CertificateRequestHeader():
@@ -15,7 +16,7 @@ class CertificateRequestHeader():
         return asdict(self)
     
     def serialize(self):
-        return cbor.dumps(self.as_dict())
+        return json.dumps(self.as_dict(), separators=(',', ':'))
 
 @dataclass
 class CertificateRequest():
@@ -36,7 +37,7 @@ class CertificateRequest():
         
         return CertificateRequest(
             header=header,
-            signature=signer.sign(header.serialize())
+            signature=signer.sign(header.serialize().encode())
         )
     
 @dataclass
@@ -50,7 +51,7 @@ class TransactionRequestHeader():
         return asdict(self)
 
     def serialize(self):
-        return cbor.dumps(self.as_dict())
+        return json.dumps(self.as_dict(), separators=(',', ':'))
     
     @staticmethod
     def create(sender_public_key: str, 
@@ -75,7 +76,7 @@ class TransactionRequest():
         return asdict(self)
     
     def serialize(self):
-        return cbor.dumps(self.as_dict())
+        return json.dumps(self.as_dict(), separators=(',', ':'))
     
     @staticmethod
     def create(signer: Signer,
@@ -92,6 +93,6 @@ class TransactionRequest():
         
         return TransactionRequest(
             header=header,
-            signature=signer.sign(header.serialize()),
+            signature=signer.sign(header.serialize().encode()),
             data=data
         )

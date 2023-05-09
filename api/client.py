@@ -61,7 +61,7 @@ class AirAnchorClient:
     def __init__(self, rabbitmq_url, priv_path: None): 
         self._rabbit_connection = pika.BlockingConnection(pika.ConnectionParameters(rabbitmq_url))
         self._rabbit_channel = self._rabbit_connection.channel()
-        self._rabbit_channel.queue_declare(queue='sawtooth', durable=True)
+        self._rabbit_channel.queue_declare(queue='gateway_queue', durable=True)
         
         self._signer = _get_private_key_as_signer(priv_path)
         
@@ -72,7 +72,7 @@ class AirAnchorClient:
         
         try:
             self._rabbit_channel.basic_publish(exchange='', 
-                                               routing_key='sawtooth', 
+                                               routing_key='gateway_queue', 
                                                body=transaction_request.serialize(),
                                                properties=pika.BasicProperties(
                                                 delivery_mode = pika.spec.PERSISTENT_DELIVERY_MODE))
